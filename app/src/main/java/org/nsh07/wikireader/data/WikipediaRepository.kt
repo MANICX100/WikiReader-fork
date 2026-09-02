@@ -6,6 +6,9 @@ import org.nsh07.wikireader.network.WikipediaApiService
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
+internal val sectionTransclusion =
+    "\\{\\{#section:\\s*([^|}]+)\\|\\s*([^}]+)\\}\\}".toRegex(RegexOption.IGNORE_CASE)
+
 interface WikipediaRepository {
     suspend fun getPrefixSearchResults(query: String): WikiApiPrefixSearchResults
     suspend fun getSearchResults(query: String): WikiApiSearchResults
@@ -39,7 +42,9 @@ class NetworkWikipediaRepository(
 
     override suspend fun getPageContent(title: String): String =
         withContext(ioDispatcher) {
-            wikipediaPageApiService.getPageContent(title)
+            expandSectionTransclusions(wikipediaPageApiService.getPageContent(title)) {
+                wikipediaPageApiService.getPageContent(it)
+            }
         }
 
     override suspend fun getRandomResult(): WikiApiPageData =
@@ -53,4 +58,35 @@ class NetworkWikipediaRepository(
         withContext(ioDispatcher) {
             wikipediaApiService.getFeed(date)
         }
+}
+
+internal suspend fun expandSectionTransclusions(
+    wikitext: String,
+    getPageContent: suspend (String) -> String
+): String {
+    val pages = mutableMapOf<String, String>()
+
+    return buildString {
+        var lastIndex = 0
+        sectionTransclusion.findAll(wikitext).forEach { match ->
+            append(wikitext, lastIndex, match.range.first)
+            val page = match.groupValues[1].trim().replace(' ', '_')
+            val section = match.groupValues[2].trim()
+            val pageContent = pages[page] ?: runCatching {
+                getPageContent(page)
+            }.getOrNull()?.also { pages[page] = it }
+            append(pageContent?.extractSection(section) ?: match.value)
+            lastIndex = match.range.last + 1
+        }
+        append(wikitext, lastIndex, wikitext.length)
+    }
+}
+
+internal fun String.extractSection(name: String): String? {
+    val escapedName = Regex.escape(name)
+    val begin = "<section\\s+begin\\s*=\\s*[\"']?$escapedName[\"']?\\s*/>"
+        .toRegex(RegexOption.IGNORE_CASE).find(this) ?: return null
+    val end = "<section\\s+end\\s*=\\s*[\"']?$escapedName[\"']?\\s*/>"
+        .toRegex(RegexOption.IGNORE_CASE).find(this, begin.range.last + 1) ?: return null
+    return substring(begin.range.last + 1, end.range.first)
 }

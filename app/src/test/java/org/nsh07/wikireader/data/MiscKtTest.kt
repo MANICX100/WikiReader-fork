@@ -3,6 +3,7 @@ package org.nsh07.wikireader.data
 import androidx.compose.material3.Typography
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.ui.graphics.Color
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -69,12 +70,37 @@ class MiscKtTest {
     }
 
     @Test
-    fun cleanUpWikitext_medalsTable_convertsToWikitable() {
-        val input = "<onlyinclude>{{Medals table|caption=Medals|gold_USA=2|silver_USA=1|bronze_USA=3}}</onlyinclude>"
-        val result = cleanUpWikitext(input)
+    fun sectionTransclusion_matchesPageAndSection() {
+        val match = sectionTransclusion.find("{{#section:Marvel Cinematic Universe: Phase One|Films}}")
 
-        assertEquals(true, result.startsWith("{| class=\"wikitable\""))
-        assertEquals(true, result.contains("| 1 || USA || 2 || 1 || 3 || 6"))
+        assertEquals("Marvel Cinematic Universe: Phase One", match?.groupValues?.get(1))
+        assertEquals("Films", match?.groupValues?.get(2))
+    }
+
+    @Test
+    fun expandSectionTransclusions_insertsRequestedTable() = runBlocking {
+        val article = "==== Phase One ====\n{{#section:Marvel Cinematic Universe: Phase One|Films}}"
+        val table = "{| class=\"wikitable\"\n| Iron Man\n|}"
+        val phasePage = "Before<section begin=Films />$table<section end=Films />After"
+
+        val result = expandSectionTransclusions(article) { phasePage }
+
+        assertEquals("==== Phase One ====\n$table", result)
+    }
+
+    @Test
+    fun extractSection_returnsMarkedContent() {
+        val table = "{| class=\"wikitable\"\n| Cell\n|}"
+        val source = "Before<section begin=Films />$table<section end=Films />After"
+
+        assertEquals(table, source.extractSection("Films"))
+    }
+
+    @Test
+    fun cleanUpWikitext_sectionMarkers_removesBothMarkers() {
+        val table = "{| class=\"wikitable\"\n| Cell\n|}"
+
+        assertEquals(table, cleanUpWikitext("<section begin=Films />$table<section end=Films />"))
     }
 
     @Test

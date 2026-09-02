@@ -4,6 +4,7 @@ import androidx.compose.ui.graphics.Color
 import org.junit.Assert
 import org.junit.Assert.assertEquals
 import org.junit.Test
+import org.nsh07.wikireader.parser.cleanUpWikitext
 import kotlin.math.pow
 
 class MiscKtTest {
@@ -55,6 +56,13 @@ class MiscKtTest {
             "\nHello\n\n=== Subheading ===\n\nHello"
         )
         assertEquals(expectedSections, sections)
+    }
+
+    @Test
+    fun cleanUpWikitext_onlyIncludeWrappedTable_removesWrapper() {
+        val table = "{| class=\"wikitable\"\n| Cell\n|}"
+
+        assertEquals(table, cleanUpWikitext("<onlyInclude>$table</onlyInclude>"))
     }
 
     @Test

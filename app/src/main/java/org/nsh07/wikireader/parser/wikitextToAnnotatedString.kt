@@ -871,6 +871,26 @@ fun String.toWikitextAnnotatedString(
                                 } else append("US$")
                             }
 
+                            currSubstring.startsWith("{{USD", true) -> {
+                                val amount = currSubstring.substringAfter('|', "").substringBefore('|')
+                                append("\$$amount")
+                            }
+
+                            currSubstring.startsWith("{{Euro", true) -> {
+                                val amount = currSubstring.substringAfter('|', "").substringBefore('|')
+                                append("€$amount")
+                            }
+
+                            currSubstring.startsWith("{{JPY", true) -> {
+                                val amount = currSubstring.substringAfter('|', "").substringBefore('|')
+                                append("¥$amount")
+                            }
+
+                            currSubstring.startsWith("{{GBP", true) -> {
+                                val amount = currSubstring.substringAfter('|', "").substringBefore('|')
+                                append("£$amount")
+                            }
+
                             currSubstring.startsWith("{{hatnote", ignoreCase = true) -> {
                                 val curr = currSubstring.substringAfter('|', "").replace('\n', ' ')
                                 append("''$curr''".twas())
@@ -1117,8 +1137,8 @@ fun String.toWikitextAnnotatedString(
                             currSubstring.startsWith("{{unbulleted list", true) -> {
                                 val splitList = currSubstring
                                     .substringAfter('|', "")
-                                    .splitNotInBraces('|')
-                                    .fastFilter { !it.contains('=') }
+                                    .splitNotInBraces('|', '{', '}')
+                                    .fastFilter { !it.trim().matches("[a-zA-Z_-]+\\s*=.*".toRegex()) }
                                     .fastMap { it.trim() }
                                     .joinToString("\n")
 

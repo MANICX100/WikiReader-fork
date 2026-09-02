@@ -8,6 +8,7 @@ import org.junit.Assert
 import org.junit.Assert.assertEquals
 import org.junit.Test
 import org.nsh07.wikireader.parser.cleanUpWikitext
+import org.nsh07.wikireader.parser.parseInfobox
 import org.nsh07.wikireader.parser.toWikitextAnnotatedString
 import kotlin.math.pow
 
@@ -63,6 +64,11 @@ class MiscKtTest {
     }
 
     @Test
+    fun cleanUpWikitext_noIncludeTag_removesTag() {
+        assertEquals("Content", cleanUpWikitext("</noinclude>Content"))
+    }
+
+    @Test
     fun cleanUpWikitext_onlyIncludeWrappedTable_removesWrapper() {
         val table = "{| class=\"wikitable\"\n| Cell\n|}"
 
@@ -101,6 +107,35 @@ class MiscKtTest {
         val table = "{| class=\"wikitable\"\n| Cell\n|}"
 
         assertEquals(table, cleanUpWikitext("<section begin=Films />$table<section end=Films />"))
+    }
+
+    @Test
+    fun parseInfobox_nestedPriceTemplates_renderCurrencies() = runBlocking {
+        val infobox = """{{Infobox computing device
+            | currentowner = [[Microsoft]]
+            | price = {{Unbulleted list
+             | '''Base''' / '''Digital Edition''' / '''Pro'''
+             | {{USD|499|link=yes}} / {{USD|399|link=yes}} / {{USD|699|link=yes}}
+             | {{Euro|499|link=yes}} / {{Euro|399|link=yes}} / {{Euro|799|link=yes}}
+             | {{JPY|49,980|link=yes}} / {{JPY|39,980|link=yes}} / {{JPY|119,980|link=yes}}
+             }}
+            }}""".trimIndent()
+
+        val rows = parseInfobox(
+            infobox,
+            lightColorScheme(),
+            Typography(),
+            {},
+            {},
+            16
+        )
+        val price = rows.first { it.first.text == "Price" }.second.text
+
+        assertEquals("Current owner", rows.first().first.text)
+        assertEquals(true, price.contains("$499 / $399 / $699"))
+        assertEquals(true, price.contains("€499 / €399 / €799"))
+        assertEquals(true, price.contains("¥49,980 / ¥39,980 / ¥119,980"))
+        assertEquals(false, price.contains("yes}}"))
     }
 
     @Test

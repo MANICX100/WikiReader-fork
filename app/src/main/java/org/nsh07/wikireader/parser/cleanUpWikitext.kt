@@ -9,6 +9,7 @@ fun cleanUpWikitext(wikitext: String): String {
     return wikitext
         .replace("<!--.+?-->".toRegex(), "")
         .replace("</?onlyinclude>".toRegex(RegexOption.IGNORE_CASE), "")
+        .replace("</?noinclude>".toRegex(RegexOption.IGNORE_CASE), "")
         .replace(
             "<section\\s+(?:begin|end)\\s*=.*?/>".toRegex(RegexOption.IGNORE_CASE),
             ""

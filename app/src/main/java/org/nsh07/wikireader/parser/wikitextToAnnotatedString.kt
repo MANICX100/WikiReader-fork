@@ -45,6 +45,9 @@ import kotlin.text.Typography.ndash
 
 private const val MAGIC_SEP = "{{!}}"
 private const val MAX_WIKITEXT_RECURSION_DEPTH = 64
+private val NUMBERED_PARAMETER = "^\\s*\\d+\\s*=\\s*".toRegex()
+
+private fun String.linkArgument(): String = replaceFirst(NUMBERED_PARAMETER, "").trim()
 
 private object WikitextParserState {
     val recursionDepth: ThreadLocal<Int> = ThreadLocal.withInitial { 0 }
@@ -618,7 +621,7 @@ fun String.toWikitextAnnotatedString(
 
                             currSubstring.startsWith("{{main", ignoreCase = true) -> {
                                 val curr = currSubstring.substringAfter('|')
-                                val splitList = curr.split('|')
+                                val splitList = curr.split('|').fastMap { it.linkArgument() }
                                 withStyle(SpanStyle(fontStyle = FontStyle.Italic)) {
                                     append("Main article")
                                     if (splitList.size > 1) append("s: ")
@@ -644,6 +647,7 @@ fun String.toWikitextAnnotatedString(
                             currSubstring.startsWith("{{see also", ignoreCase = true) -> {
                                 val curr = currSubstring.substringAfter('|')
                                 val splitList = curr.split('|').filterNot { it.startsWith('#') }
+                                    .fastMap { it.linkArgument() }
                                 withStyle(SpanStyle(fontStyle = FontStyle.Italic)) {
                                     append("See also: ")
                                     splitList.fastForEachIndexed { index, it ->
@@ -1366,6 +1370,10 @@ fun String.toWikitextAnnotatedString(
                     if (input.getOrNull(i + 1) == '[') {
                         val curr = input.substring(i + 2).substringBefore("]]")
                         if (!curr.startsWith("File:", ignoreCase = true)) {
+                            val rawTarget = curr.substringBefore('|')
+                            val target = rawTarget.linkArgument().removePrefix(":")
+                            val label = if ('|' in curr) curr.substringAfter('|').linkArgument()
+                            else rawTarget
                             withLink(
                                 LinkAnnotation.Url(
                                     "",
@@ -1373,10 +1381,10 @@ fun String.toWikitextAnnotatedString(
                                         SpanStyle(color = colorScheme.primary)
                                     )
                                 ) {
-                                    loadPage(curr.substringBefore('|').substringBefore('#'))
+                                    loadPage(target.substringBefore('#'))
                                 }
                             ) {
-                                append(curr.substringAfter('|').trim().twas())
+                                append(label.twas())
                             }
                             i += 1 + curr.length + 2
                         } else i += substringMatchingParen('[', ']', i).length - 1

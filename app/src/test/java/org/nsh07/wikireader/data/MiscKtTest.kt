@@ -1,10 +1,13 @@
 package org.nsh07.wikireader.data
 
+import androidx.compose.material3.Typography
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.ui.graphics.Color
 import org.junit.Assert
 import org.junit.Assert.assertEquals
 import org.junit.Test
 import org.nsh07.wikireader.parser.cleanUpWikitext
+import org.nsh07.wikireader.parser.toWikitextAnnotatedString
 import kotlin.math.pow
 
 class MiscKtTest {
@@ -63,6 +66,28 @@ class MiscKtTest {
         val table = "{| class=\"wikitable\"\n| Cell\n|}"
 
         assertEquals(table, cleanUpWikitext("<onlyInclude>$table</onlyInclude>"))
+    }
+
+    @Test
+    fun cleanUpWikitext_medalsTable_convertsToWikitable() {
+        val input = "<onlyinclude>{{Medals table|caption=Medals|gold_USA=2|silver_USA=1|bronze_USA=3}}</onlyinclude>"
+        val result = cleanUpWikitext(input)
+
+        assertEquals(true, result.startsWith("{| class=\"wikitable\""))
+        assertEquals(true, result.contains("| 1 || USA || 2 || 1 || 3 || 6"))
+    }
+
+    @Test
+    fun toWikitextAnnotatedString_numberedMainLink_hidesParameterName() {
+        val result = "{{main|1=Example}}".toWikitextAnnotatedString(
+            colorScheme = lightColorScheme(),
+            typography = Typography(),
+            loadPage = {},
+            fontSize = 16,
+            showRef = {}
+        )
+
+        assertEquals("Main article: Example\n", result.text)
     }
 
     @Test

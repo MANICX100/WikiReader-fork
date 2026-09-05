@@ -139,6 +139,69 @@ class MiscKtTest {
     }
 
     @Test
+    fun toWikitextAnnotatedString_mainWithLabel_rendersSingleLabelledLink() {
+        val result = "{{main|Reacher season 1|l1=''Reacher'' season 1}}".toWikitextAnnotatedString(
+            colorScheme = lightColorScheme(),
+            typography = Typography(),
+            loadPage = {},
+            fontSize = 16,
+            showRef = {}
+        )
+
+        assertEquals("Main article: Reacher season 1\n", result.text)
+    }
+
+    @Test
+    fun toWikitextAnnotatedString_startDate_rendersReadableDate() {
+        val result = "{{Start date|2022|2|4}}".toWikitextAnnotatedString(
+            colorScheme = lightColorScheme(),
+            typography = Typography(),
+            loadPage = {},
+            fontSize = 16,
+            showRef = {}
+        )
+
+        assertEquals("February 4, 2022", result.text)
+    }
+
+    @Test
+    fun cleanUpWikitext_episodeTable_convertsToWikitable() {
+        val input = """<onlyinclude>{{Episode table |background=#3B3D3E |overall=5 |episodes=
+            {{Episode list/sublist|Reacher season 1
+            | EpisodeNumber   = 1
+            | EpisodeNumber2  = 1
+            | Title           = Welcome to Margrave
+            | DirectedBy      = [[Thomas Vincent (director)|Thomas Vincent]]
+            | WrittenBy       = [[Nick Santora]]
+            | OriginalAirDate = {{Start date|2022|2|4}}
+            | ShortSummary    = At midnight, a man is shot dead.
+            | LineColor       = 3B3D3E
+            }}
+            }}</onlyinclude>""".trimIndent()
+
+        val result = cleanUpWikitext(input)
+
+        assertEquals(true, result.startsWith("{| class=\"wikitable\""))
+        assertEquals(true, result.contains("! No. !! Title !! Directed by !! Written by !! Original air date"))
+        assertEquals(true, result.contains("| \"Welcome to Margrave\""))
+        assertEquals(true, result.contains("| [[Thomas Vincent (director)|Thomas Vincent]]"))
+        assertEquals(true, result.contains("| {{Start date|2022|2|4}}"))
+        assertEquals(false, result.contains("ShortSummary"))
+        assertEquals(false, result.contains("Episode table"))
+    }
+
+    @Test
+    fun expandPageTransclusions_insertsOnlyIncludeContent() = runBlocking {
+        val article = "=== Season 1 (2022) ===\n{{:Reacher season 1}}"
+        val table = "{| class=\"wikitable\"\n| Episode\n|}"
+        val seasonPage = "==Episodes==\n<onlyinclude>$table</onlyinclude>\n==Cast=="
+
+        val result = expandPageTransclusions(article) { seasonPage }
+
+        assertEquals("=== Season 1 (2022) ===\n$table", result)
+    }
+
+    @Test
     fun toWikitextAnnotatedString_numberedMainLink_hidesParameterName() {
         val result = "{{main|1=Example}}".toWikitextAnnotatedString(
             colorScheme = lightColorScheme(),

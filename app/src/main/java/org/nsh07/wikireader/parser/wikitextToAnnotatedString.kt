@@ -49,6 +49,39 @@ private val NUMBERED_PARAMETER = "^\\s*\\d+\\s*=\\s*".toRegex()
 
 private fun String.linkArgument(): String = replaceFirst(NUMBERED_PARAMETER, "").trim()
 
+private val HATNOTE_LABEL =
+    "^l(\\d+)\\s*=\\s*(.*)$".toRegex(setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL))
+private val NAMED_PARAMETER =
+    "^[a-zA-Z][\\w-]*\\s*=.*$".toRegex(RegexOption.DOT_MATCHES_ALL)
+private val monthNames = listOf(
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"
+)
+
+/**
+ * Resolves hatnote template parameters into (target, label) links, supporting `lN=` display
+ * labels (e.g. `{{main|Reacher season 1|l1=''Reacher'' season 1}}`).
+ */
+private fun hatnoteLinks(params: List<String>): List<Pair<String, String>> {
+    val labels = mutableMapOf<Int, String>()
+    val targets = mutableListOf<String>()
+
+    params.forEach { param ->
+        val label = HATNOTE_LABEL.find(param.trim())
+        if (label != null) {
+            labels[label.groupValues[1].toInt()] = label.groupValues[2].trim()
+        } else {
+            val target = param.linkArgument()
+            if (target.isNotEmpty() && !target.matches(NAMED_PARAMETER)) targets.add(target)
+        }
+    }
+
+    return targets.mapIndexed { index, target ->
+        target.substringBefore(MAGIC_SEP) to
+                (labels[index + 1] ?: target.substringAfter(MAGIC_SEP))
+    }
+}
+
 private object WikitextParserState {
     val recursionDepth: ThreadLocal<Int> = ThreadLocal.withInitial { 0 }
 }
@@ -620,46 +653,40 @@ fun String.toWikitextAnnotatedString(
                             }
 
                             currSubstring.startsWith("{{main", ignoreCase = true) -> {
-                                val curr = currSubstring.substringAfter('|')
-                                val splitList = curr.split('|').fastMap { it.linkArgument() }
+                                val links =
+                                    hatnoteLinks(currSubstring.substringAfter('|').split('|'))
                                 withStyle(SpanStyle(fontStyle = FontStyle.Italic)) {
                                     append("Main article")
-                                    if (splitList.size > 1) append("s: ")
+                                    if (links.size > 1) append("s: ")
                                     else append(": ")
-                                    splitList.fastForEachIndexed { index, it ->
+                                    links.fastForEachIndexed { index, (target, label) ->
                                         append(
-                                            "[[${it.substringBefore(MAGIC_SEP)}|${
-                                                it.substringAfter(MAGIC_SEP).replace(
-                                                    "#",
-                                                    " § "
-                                                )
-                                            }]]".twas()
+                                            "[[$target|${label.replace("#", " § ")}]]".twas()
                                         )
-                                        if (index == splitList.size - 2 && splitList.size > 1) append(
+                                        if (index == links.size - 2 && links.size > 1) append(
                                             ", and "
                                         )
-                                        else if (index < splitList.size - 1) append(", ")
+                                        else if (index < links.size - 1) append(", ")
                                     }
                                 }
                                 append('\n')
                             }
 
                             currSubstring.startsWith("{{see also", ignoreCase = true) -> {
-                                val curr = currSubstring.substringAfter('|')
-                                val splitList = curr.split('|').filterNot { it.startsWith('#') }
-                                    .fastMap { it.linkArgument() }
+                                val links = hatnoteLinks(
+                                    currSubstring.substringAfter('|').split('|')
+                                        .filterNot { it.startsWith('#') }
+                                )
                                 withStyle(SpanStyle(fontStyle = FontStyle.Italic)) {
                                     append("See also: ")
-                                    splitList.fastForEachIndexed { index, it ->
+                                    links.fastForEachIndexed { index, (target, label) ->
                                         append(
-                                            "[[${it.substringBefore(MAGIC_SEP)}|${
-                                                it.substringAfter((MAGIC_SEP)).replace("#", " § ")
-                                            }]]".twas()
+                                            "[[$target|${label.replace("#", " § ")}]]".twas()
                                         )
-                                        if (index == splitList.size - 2 && splitList.size > 1) append(
+                                        if (index == links.size - 2 && links.size > 1) append(
                                             ", and "
                                         )
-                                        else if (index < splitList.size - 1) append(", ")
+                                        else if (index < links.size - 1) append(", ")
                                     }
                                 }
                             }
@@ -889,6 +916,27 @@ fun String.toWikitextAnnotatedString(
                             currSubstring.startsWith("{{GBP", true) -> {
                                 val amount = currSubstring.substringAfter('|', "").substringBefore('|')
                                 append("£$amount")
+                            }
+
+                            listOf("{{start date", "{{end date").fastAny {
+                                currSubstring.startsWith(it, true)
+                            } -> {
+                                val params = currSubstring.substringAfter('|', "")
+                                    .splitNotInBraces('|', '{', '}')
+                                    .fastMap { it.trim() }
+                                    .fastFilter { it.isNotEmpty() && !it.contains('=') }
+                                val year = params.getOrNull(0)
+                                val month = params.getOrNull(1)?.toIntOrNull()
+                                val day = params.getOrNull(2)?.toIntOrNull()
+                                when {
+                                    year != null && month != null && month in 1..12 && day != null ->
+                                        append("${monthNames[month - 1]} $day, $year")
+
+                                    year != null && month != null && month in 1..12 ->
+                                        append("${monthNames[month - 1]} $year")
+
+                                    year != null -> append(year)
+                                }
                             }
 
                             currSubstring.startsWith("{{hatnote", ignoreCase = true) -> {
